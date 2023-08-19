@@ -106,7 +106,8 @@ public class HelloController {
 
 <br/>
 
-## RedisTemplate
+## RedisTemplate주는 Interface
+
 
 RedisTemplate은 Spring Framework에서 제공하는 클래스로, Redis 데이터베이스와 상호작용하기 위한 고급 수준의 템플릿 클래스입니다.  
 RedisTemplate은 다양한 데이터 유형과 작업을 처리할 수 있는 유연한 인터페이스를 제공하며, Redis 데이터베이스와의 상호작용을 추상화하여 개발자가 더 편리하게 Redis 데이터를 다룰 수 있도록 합니다.  
@@ -115,8 +116,7 @@ RedisTemplate은 다양한 데이터 유형과 작업을 처리할 수 있는 �
  - opsForList: List를 쉽게 Serialize / Deserialize 해주는 Interface
  - opsForSet: Set를 쉽게 Serialize / Deserialize 해주는 Interface
  - opsForZSet: ZSet를 쉽게 Serialize / Deserialize 해주는 Interface
- - opsForHash: Hash를 쉽게 Serialize / Deserialize 해주는 Interface
-
+ - opsForHash: Hash를 쉽게 Serialize / Deserialize 해
 <br/>
 
 ## StringRedisTemplate
