@@ -559,3 +559,20 @@ void openStudy() {
 }
 
 ```
+
+<br/>
+
+## @Mock과 @MockBean
+
+@Mock과 @MockBean은 모두 테스트에서 모의 객체(Mock)를 생성하고 사용하기 위한 어노테이션이다.  
+ - @Mock
+    - Mockito 라이브러리에서 제공된다.
+    - 일반적으로 단위 테스트에서 객체의 메서드를 호출하고 그에 대한 응답을 정의하는데 사용된다.
+    - Spring 프레임워크와는 직접적인 연관이 없으며, Spring 테스트 컨텍스트를 로드하지 않는다.
+    - JUnit 5와 통합하기 위해서는 MockitoExtension을 확장 등록해야한다. (ex: @ExtendWith(MockitoExtension.class))
+ - @MockBean
+    - Spring Boot 테스트에서 제공된다.
+    - 통합 테스트나 컨트롤러 테스트에서 Spring 빈을 모의하거나 대체하는데 사용된다.
+    - 기본적으로 Spring Boot의 테스트 컨텍스트와 통합되어 Spring 애플리케이션 컨텍스트에 모의 빈을 등록한다.
+    - @SpringBootTest나 @WebMvcTest와 함께 사용될 때 유용하게 활용된다.
+
