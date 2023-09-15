@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+    <!-- 설정: 로깅 파일 위치 -->
+    <property name="LOG_ROOT" value="./logs" />
+
+    <!-- 설정: 로깅 파일명 -->
+    <property name="LOG_FILE_NAME" value="hello-logback" />
+
+    <!-- 콘솔 파일 Appender -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 롤링 파일 Appender -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_ROOT}/${LOG_FILE_NAME}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_ROOT}/${LOG_FILE_NAME}.%d{yyyy-MM-dd_HH:mm}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <springProfile name="local">
+        <!-- For the "local" profile is active -->
+        <root level="debug">
+            <appender-ref ref="STDOUT" />
+        </root>
+    </springProfile>
+
+    <springProfile name="dev">
+        <!-- For the "dev" profiles are active -->
+        <root level="debug">
+            <appender-ref ref="STDOUT" />
+            <appender-ref ref="FILE" />
+        </root>
+    </springProfile>
+
+    <springProfile name="staging | prod | production">
+        <!-- For the "staging" or "prod" or "production" profile are active -->
+        <root level="info">
+            <appender-ref ref="STDOUT" />
+            <appender-ref ref="FILE" />
+        </root>
+    </springProfile>
+
+</configuration>

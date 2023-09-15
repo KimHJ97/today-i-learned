@@ -1,0 +1,4 @@
+notification:
+  slack:
+    webhook:
+      url: [Put your Slack-webhook URL Dev Alert here]
