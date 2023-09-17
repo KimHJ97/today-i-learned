@@ -5,6 +5,15 @@
 
 <br/>
 
+## 관련 자료
+
+ - 소스 코드 내용: https://github.com/joneconsulting/cicd-web-project
+ - Script 파일 내용: https://github.com/joneconsulting/jenkins_cicd_script
+ - 도커 파일 내용: https://github.com/joneconsulting/docker-files
+ - 쿠버네티스 설치 가이드: https://github.com/joneconsulting/k8s/blob/master/install/kubernetes_install.md
+
+<br/>
+
 ## 목차
 
  - Section 1. DevOps와 CI/CD
