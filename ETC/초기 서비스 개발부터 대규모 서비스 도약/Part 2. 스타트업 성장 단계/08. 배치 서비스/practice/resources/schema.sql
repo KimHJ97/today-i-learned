@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS customers  (
+     id IDENTITY NOT NULL PRIMARY KEY,
+     name VARCHAR(45) NOT NULL,
+     age INT NOT NULL
+);
