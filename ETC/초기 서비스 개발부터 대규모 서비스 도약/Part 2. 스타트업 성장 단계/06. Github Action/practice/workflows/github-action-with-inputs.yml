@@ -1,0 +1,24 @@
+name: hello-github-actions-with-inputs
+run-name: ${{ github.actor }}의 헬로 깃허브
+on:
+  workflow_dispatch: # 개발자가 수동으로 클릭해서 수행하는 이벤트
+    inputs: # 입력값을 받는 경우
+      your_name:
+        required: true
+        type: string
+      your_age:
+        required: true
+        type: integer
+jobs:
+  hello-spring-boot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      - run: chmod +x gradlew
+      - run: ./gradlew clean build test
+      - run: echo "Hello, ${{ inputs.your_name }}"
+      - run: echo "Your age is ${{ inputs.your_age }}"

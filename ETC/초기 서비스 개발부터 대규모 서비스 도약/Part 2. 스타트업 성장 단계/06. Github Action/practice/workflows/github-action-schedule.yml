@@ -1,0 +1,13 @@
+name: hello-github-action-schedule
+run-name: Execution a workflow by schedule
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every 5 minute
+        run: echo "Hello Github Action Schedule"
