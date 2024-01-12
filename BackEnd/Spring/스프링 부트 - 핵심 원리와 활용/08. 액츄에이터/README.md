@@ -245,3 +245,149 @@ plugins {
 }
 ```
 
+<br/>
+
+## 로거
+
+loggers 엔드포인트를 사용하면 로깅과 관련된 정보를 확인하고, 또 실시간으로 변경할 수도 있다.  
+
+ - `LogController`
+```java
+@Slf4j
+@RestController
+public class LogController {
+
+    @GetMapping("/log")
+    public String log() {
+        log.trace("trace log");
+        log.debug("debug log");
+        log.info("info log");
+        log.warn("warn log");
+        log.error("error log");
+        return "ok";
+    }
+}
+```
+
+<br/>
+
+ - `application.yml`
+  - 'hello.controller' 패키지와 그 하위는 debug 레벨로 출력하도록 설정한다.
+```yml
+logging:
+  level:
+    hello.controller: debug
+```
+
+<br/>
+
+ - `로깅 레벨 확인`
+  - 조회: '/actuator/loggers'
+  - 자세히 조회: '/actuator/loggers/hello.controller'
+  - 로그를 별도로 설정하지 않으면 스프링 부트는 기본으로 INFO 레벨로 설정한다. 실행 결과를 보면 ROOT의 configuredLevel이 INFO인 것을 확인할 수 있다.
+```json
+{
+  "levels":[
+    "OFF",
+    "ERROR",
+    "WARN",
+    "INFO",
+    "DEBUG",
+    "TRACE"
+  ],
+  "loggers":{
+    "ROOT":{
+      "configuredLevel":"INFO",
+      "effectiveLevel":"INFO"
+    },
+    "_org.springframework":{
+      "effectiveLevel":"INFO"
+    },
+    "hello":{
+      "effectiveLevel":"INFO"
+    },
+    "hello.ActuatorApplication":{
+      "effectiveLevel":"INFO"
+    },
+    "hello.controller":{
+      "configuredLevel":"DEBUG",
+      "effectiveLevel":"DEBUG"
+    },
+    "hello.controller.LogController":{
+      "effectiveLevel":"DEBUG"
+    }
+  }
+}
+```
+
+<br/>
+
+### 실시간 로그 레벨 변경
+
+loggers 엔드포인트를 사용하면 애플리케이션을 재실행하지 않고, 실시간으로 로그 레벨을 변경할 수 있다.  
+HTTP 클라이언트를 이용하여 POST 요청의 JSON 형식으로 변경을 전달할 수 있다.  
+
+ - '/actuator/loggers/hello.controller'
+  - 해당 URL의 POST 요청으로 content/type을 application/json으로 아래 Body를 전달한다.
+```json
+{
+  "configuredLevel": "TRACE"
+}
+```
+
+<br/>
+
+## HTTP 요청 응답 기록
+
+HTTP 요청과 응답의 과거 기록을 확인하고 싶다면 httpexchanges 엔드포인트를 사용하면 된다.  
+HttpExchangeRepository 인터페이스의 구현체를 빈으로 등록하면 httpexchanges 엔드포인트를 사용할 수 있다.  
+스프링 부트는 기본으로 InMemoryHttpExchangeRepository 구현체를 제공한다.  
+
+'actuator/httpexchanges' 로 요청하면 HTTP 요청과 응답 정보를 확인할 수 있다. 해당 기능은 매우 단순하고 기능에 제한이 많아 개발 단계에서만 사용하고, 실제 운영 서비스에서는 모니터링 툴이나 핀포인트, Zipkin 같은 다른 기술을 사용하는 것이 좋다.  
+
+ - `ActuatorApplication`
+  - HttpExchangeRepository 인터페이스의 구현체인 InMemoryHttpExchangeRepository를 스프링 빈으로 등록한다.
+  - InMemoryHttpExchangeRepository는 최대 100개의 HTTP 요청을 제공한다. 최대 요청이 넘어가면 과거 요청을 삭제한다. setCapacity() 메서드로 최대 요청수를 설정할 수 있다.
+```java
+@SpringBootApplication
+public class ActuatorApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(ActuatorApplication.class, args);
+    }
+
+    @Bean
+    public InMemoryHttpExchangeRepository httpExchangeRepository() {
+        return new InMemoryHttpExchangeRepository();
+    }
+
+}
+```
+
+<br/>
+
+## 엑츄에이터 보안
+
+액츄에이터가 제공하는 기능들은 우리 애플리케이션의 내부 정보를 너무 많이 노출한다. 그래서 외부 인터넷 망이 공개된 곳에 액츄에이터의 엔드포인트를 공개하는 것은 보안상 좋은 방안이 아니다. 액츄에이터의 엔드포인트들은 외부 인터넷에서 접근이 불가능하게 막고, 내부에서만 접근 가능한 내부망을 사용하는 것이 안전하다.  
+
+<br/>
+
+예를 들어서 외부 인터넷 망을 통해서 8080 포트에만 접근할 수 있고, 다른 포트는 내부망에서만 접근할 수 있다면 액츄에이터에 다른 포트를 설정하면 된다.  
+액츄에이터의 기능을 애플리케이션 서버와는 다른 포트에서 실행하려면 다음과 같이 설정하면 된다. 이 경우 기존 8080 포트에서는 액츄에이터를 접근할 수 없다.
+
+ - `application.properties`
+  - 'http://localhost:9292/actuator' 로 엑츄에이터에 접근한다.
+```properties
+management.server.port=9292
+```
+
+<br/>
+
+ - `엔드포인트 경로 변경`
+  - '/actuator/{엔드포인트}' 대신에 '/manage/{엔드포인트}'로 접근하게 된다.
+```yml
+managemen:
+  endpoints:
+    web:
+      base-path: "/manage"
+```
