@@ -65,7 +65,7 @@
     - JDK 17
     - IntelliJ(IDE)
  - __기술 분류(개발)__
-    - Spring Boot 2.3
+    - Spring Boot 3.x
     - MyBatis
  - __기술 분류(데이터)__
     - MySQL
