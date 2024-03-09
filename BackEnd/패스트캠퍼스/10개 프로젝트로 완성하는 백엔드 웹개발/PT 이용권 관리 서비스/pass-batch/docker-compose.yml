@@ -1,0 +1,15 @@
+# https://hub.docker.com/_/mysql
+
+version: "3.8"                                    # docker-compose 파일 버전입니다.
+services:                                         # 서비스들을 선언합니다.
+  mysql:                                          # 서비스명을 선언합니다.
+    container_name: mysql_local
+    build: .
+    ports:                                        # 외부로 노출시킬 port 입니다.
+      - "3306:3306"
+    environment:                                  # 환경 변수
+      - MYSQL_DATABASE=pass_local
+      - MYSQL_USER=pass_local_user
+      - MYSQL_PASSWORD=passlocal123
+      - MYSQL_ROOT_PASSWORD=passlocal123
+      - TZ=Asia/Seoul
