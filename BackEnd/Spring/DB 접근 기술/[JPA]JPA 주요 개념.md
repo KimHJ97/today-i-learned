@@ -1543,3 +1543,448 @@ public class Member extends BaseEntity {
 
 <br/>
 
+## 7. 프록시와 연관 관계 관리
+
+엔티티를 조회할 때 연관된 엔티티들이 항상 사용되지는 않는다. 연관 관계의 엔티티는 비즈니스 로직에 다라 사용될 떄도 있지만 그렇지 않을 떄도 있다.  
+JPA는 이런 문제를 해결하기 위해 엔티티가 실제 사용될 때까지 데이터베이스 조회를 지연하는 방법을 제공하는데 이것을 지연 로딩이라고 한다. 지연 로딩 기능을 사용하기 위해서는 실제 엔티티 객체 대상에 데이터 베이스 조회를 지연할 수 있는 가짜 객체가 필요한데 이것을 프록시 객체라고 한다.  
+하이버네이트는 지연 로딩을 지원하기 위해 프록시를 사용하는 방법과 바이트 코드를 수정하는 두 가지 방법을 제공한다.  
+
+```java
+// CASE 1. Member, Team 객체 조회 필요
+public void printUserAndTeam(String memberId) {
+	Member member = em.find(Member.class, memberId);
+	Team team = member.getTeam();
+	System.out.println("회원 이름: " + member.getUsername());
+	System.out.println("소식팀: " + team.getName()); // team 객체 조회
+}
+
+// CASE 2. Member 객체 조회 필요
+public void printUser(String memberId) {
+	Member member = em.find(Member.class, memberId);
+	Team team = member.getTeam();
+	System.out.println("회원 이름: " + member.getUsername());
+}
+```
+
+<br/>
+
+### 프록시 기초
+
+find() 메서드를 사용하면 영속성 컨텍스트에 엔티티가 없는 경우 데이터베이스를 조회한다.  
+엔티티를 실제 사용하는 시점까지 데이터베이스 조회를 미루고 싶은 경우 getReference() 메서드를 사용하면 된다. 해당 메서드를 호출하면 데이터베이스 접근을 위임한 프록시 객체가 반환된다.  
+ - 프록시 객체는 실제 객체에 대한 참조(target)를 보관한다. 그리고 프록시 객체의 메서드를 호출하면 프록시 객체는 실제 객체의 메서드를 호출한다. 이를 프록시 객체 초기화라 한다.
+
+```java
+Member member = em.find(Member.class, "member1");
+Member member = em.getReference(Member.class, "member1");
+```
+
+<br/>
+
+### 프록시의 특징
+
+ - 프록시 객체는 처음 사용할 때 한 번만 초기화된다.
+ - 프록시 객체를 초기화한다고 프록시 객체가 실제 엔티티로 바뀌는 것은 아니다. 프록시 객체가 초기화되면 프록시 객체를 통해서 실제 엔티티에 접근할 수 있다.
+ - 프록시 객체는 원본 엔티티를 상속받은 객체이므로 타입 체크 시에 주의해서 사용해야 한다.
+ - 영속성 컨텍스트에 찾는 엔티티가 이미 있으면 데이터베이스를 조회할 필요가 없으므로 em.getReference() 메서드를 호출해도 프록시가 아닌 실제 엔티티를 반환한다.
+ - 초기화는 영속성 컨텍스트의 도움을 받아야 가능하다. 따라서 영속성 컨텍스트의 도움을 받을 수 없는 준영속 상태의 프록시를 초기화하면 문제가 발생한다. 하이버네이트는 org.hibernate.LazyInitializationException 예외를 발생시킨다.
+
+<br/>
+
+### 프록시와 식별자
+
+프록시 객체는 식별자 값을 가지고 있다. 때문에, 식별자 값을 조회하는 team.getId()를 호출해도 프록시를 초기화하지 않는다. (@Access(AccessType.PROPERTY)로 설정한 경우에만 초기화하지 않는다.)  
+엔티티 접근 방식을 필드(AccessType.FIELD)로 설정하면 JPA는 getId() 메서드가 id만 조회하는 메서드인지 다른 필드까지 활용해서 어떤 일을 하는 메서드인지 알지 못하여 프록시 객체를 초기화한다.  
+ - PersistenceUnitUtil.isLoaded(Object entity) 메소드를 사용하면 프록시 인스턴스의 초기화 여부를 확인할 수 있다.
+ - 하이버네이트의 initialize() 메소드를 사용하면 프록시를 강제로 초기화할 수 있다.
+```java
+boolean isLoad = em.getEntityManagerFactory().getPersistenceUnitUtil().isLoaded(entity);
+//또는 boolean isLoad = emf.getPersistenceUnitUtil().isLoaded(entity);
+
+System.out.println("isLoad = " + isLoad); // 초기화 여부 확인
+
+// org.hibernate.Hibernate.initialize(order.getMember()); // 프록시 초기화
+```
+
+<br/>
+
+### 즉시 로딩과 지연 로딩
+
+즉시 로딩은 엔티티를 조회할 때 연관된 엔티티도 함께 조회한다. (@ManyToOne(fetch = FetchType.EAGER))  
+지연 로딩은 연관된 엔티티를 실제 사용할 때 조회한다. (@ManyToOne(fetch = FetchType.LAZY))  
+
+<br/>
+
+#### 즉시 로딩
+
+ - __내부 조인 사용하기__
+    - 외래 키에 NOT NULL 제약 조건을 설정하면 값이 있는 것을 보자한다.
+    - @JoinColumn(name = "TEAM_ID", nullable = false)
+    - @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    - JPA는 선택적 관계면 외부 조인을 사용하고, 필수 관계면 내부 조인을 사용한다.
+
+<br/>
+
+#### 지연 로딩
+
+조회 대상이 영속성 컨텍스트에 이미 있으면 프록시 객체를 사용할 이유가 없다. 따라서 프록시가 아닌 실제 객체를 사용한다.  
+
+하이버네이트는 엔티티를 영속 상태로 만들 때 엔티티에 컬렉션이 있으면 컬렉션을 추적하고, 관리할 목적으로 원본 컬렉션을 하이버네이트가 제공하는 내장 컬렉션으로 변경하는데 이것을 컬렉션 래퍼라고 한다.  
+
+```java
+@Entity
+public class Member {
+	@Id
+	private String id;
+
+	@OneToMany(mappedBy = "member", fetch = FetchType.LAZY)
+	private List<Order> orders;
+	
+	...
+}
+```
+
+<br/>
+
+### JPA 기본 패치 전략
+
+JPA의 기본 패치 전략은 연관된 엔티티가 하나면 즉시 로딩을 사용하고, 컬렉션이면 지연 로딩을 사용한다.
+ - @ManyToOne, @OneToOne: 즉시 로딩(FetchType.EAGER)
+ - @OneToMany, @ManyToMany: 지연 로딩(FetchType.LAZY)
+
+<br/>
+
+#### FetchType.EAGER 설정과 조인 전략
+
+ - @ManyToOne, @OneToOne
+    - (optional = false): 내부 조인
+    - (optional = true): 외부 조인
+ - @OneToMany, @ManyToMany
+    - (optional = false): 외부 조인
+    - (optional = true): 외부 조인
+
+<br/>
+
+### 영속성 전이: CASCADE
+
+특정 엔티티를 영속 상태로 만들 때 연관된 엔티티도 함께 영속 상태로 만들고 싶으면 영속성 전이 기능을 사용하면 된다. JPA는 CASCADE 옵션으로 영속성 전이를 제공한다.  
+
+ - JPA에서 엔티티를 저장할 때 연관된 모든 엔티티는 영속 상태여야 한다. 따라서, 예제에서 부모 엔ㄴ티티, 자식 엔티티 각각 영속 상태로 만든다.
+```java
+private static void saveNoCascade(EntityManager em) {
+    // 부모 저장
+    Parent parent = new Parent();
+    em.persist(parent) ;
+
+    // 1번 자식 저장
+    Child child1 = new Child();
+    child1.setParent(parent); //자식 -> 부모 연관관계 설정
+    parent.getChildren().add(childl) ; //부모 -> 자식
+    em.persist(childl);
+
+    // 2번 자식 저장
+    Child child2 = new Child();
+    child2.setParent(parent); //자식 -> 부모 연관관계 설정
+    parent.getChildren().add(child2); //부모 -> 자식
+    em.persist(child2);
+}
+```
+
+<br/>
+
+ - `영속성 전이: 저장`
+    - 영속성 전이는 연관관계를 매핑하는 것과는 아무 관련이 없다. 단지 엔티티를 영속화할 때 연관된 엔티티도 같이 영속화하는 편리함을 제공할 뿐이다.
+```java
+@Entity
+public class Parent {
+	...
+
+	@OneToMany(mappedBy = "parent", cascade = CascadeType.PERSIST)
+	private List<Child> children = new ArrayList<Child>();
+}
+
+private static void saveWithCascade(EntityManager em) {
+    Child child1 = new Child();
+    Child child2 = new Child();
+
+    Parent parent = new Parent();
+    childl.setParent(parent) ; //연관관계 추가
+    child2.setParent(parent) ; //연관관계 추가
+    parent.getChildren().add(child1);
+    parent.getChildren().add(child2);
+    
+    //부모저장, 연관된자식들저장
+    em.persist(parent);
+}
+```
+
+<br/>
+
+#### CASCADE 종류
+
+CascadeType.PERSIST, CascadeType.REMOVE는 em.persist(), em.remove()를 실행할 때 바로 전이가 발생하지 않고 플러시를 호출할 때 전이가 발생한다.  
+
+```java
+public enum CascadeType {
+    ALL, //모두 적용
+    PERSIST, //영속
+    MERGE, //병합
+    REMOVE, //삭제
+    REFRESH, //REFRESH
+    DETACH //DETACH
+}
+```
+
+<br/>
+
+#### 고아 객체
+
+JPA는 부모 엔티티와 연관관계가 끊어진 자식 엔티티를 자동으로 삭제하는 기능을 제공하는데 이것을 고아 객체 제거라 한다.  
+부모 엔티티의 컬렉션에서 자식 엔티티의 참조만 제거하면 자식 엔티티가 자동으로 삭제되도록 할 수 있다.  
+고아 객체 제거 기능은 영속성 컨텍스트를 플러시할 때 적용되므로 플러시 시점에 DELETE SQL이 실행된다.  
+ - 참조가 제거된 엔티티는 다른 곳에서 참조하지 않는 고아 객체로 보고 삭제하는 기능이다. 만약 삭제한 엔티티를 다른 곳에서도 참조한다면 문제가 발생할 수 있다. 이런 이유로 orphanRemovel은 @OneToOne, @OneToMany에만 사용할 수 있다.
+ - 부모를 제거하면 자식도 같이 제거할 수 있다. CadecadeType.REMOVE를 설정하면 가능하다.
+
+```java
+@Entity
+public class Parent {
+    @Id @GeneratedValue
+    private Long id;
+    
+    @OneToMany(mappedBy = "parent", orphanRemoval = true)
+    private List<Child> children = new ArrayList<Child>();
+    ...
+}
+
+// 예제 코드
+Parent parent1 = em.find(Parent.class, id);
+parent1.getChildren().remove(0); //자식 엔티티를 컬렉션에서 제거
+```
+
+<br/>
+
+### 프록시와 연관 관계 정리
+
+ - JPA 구현체들은 객체 그래프를 마음껏 탐색할 수 있도록 지원하는데 이때 프록시 기술을 사용한다.
+ - 객체를 조회할 때 연관된 객체를 즉시 로딩하는 방법을 즉시 로딩이라 하고, 연관된 객체를 지연해서 로딩하는 방법을 지연 로딩이라 한다.
+ - 객체를 저장하거나 삭제할 때 연관된 객체도 함께 저장하거나 삭제할 수 있는데 이것을 영속성 전이라 한다.
+ - 부모 엔티티와 연관관계가 끊어진 자식 엔티티를 자동으로 삭제하려면 고아 객체 제거 기능을 사용하면 된다.
+
+<br/>
+
+## 8. 값 타입
+
+JPA의 데이터 타입을 가장 크게 분류하면 엔티티 타입과 값 타입으로 나눌 수 있다.  
+
+<br/>
+
+### 기본값 타입
+
+Member 엔티티의 값 타입인 name, age 속성은 식별자 값도 없고 생명 주기도 회원 엔티티에 의존한다. 따라서 회원 엔티티 인스턴스를 제거하면 name, age 값도 제거된다. 그리고 값 타입은 공유하면 안 된다.  
+
+```java
+@Entity
+public class Member {
+	@Id @GeneratedValue
+	private Long id;
+
+	private String name;
+	private int age;
+	...
+}
+```
+
+<br/>
+
+### 임베디드 타입(복합 값 타입)
+
+새로운 값 타입을 직접 정의해서 사용할 수 있는데, JPA에서는 이것을 임베디드 타입이라 한다.  
+임베디드 타입을 포함한 모든 값 타입은 엔티티의 생명주기에 의존하므로 엔티티와 임베디드 타입의 관계를 UML로 표현하면 컴포지션 관계가 된다.  
+
+ - @Embeddable : 값 타입을 정의하는 곳에 표시
+ - @Embedded : 값 타입을 사용하는 곳에 표시
+
+<br/>
+
+ - __@AttributeOverride: 속성 재정의__
+    - 임베디드 타입에 정의한 매핑 정보를 재정의하려면 엔티티에 @AttributeOverride를 사용하면 된다.
+```java
+@Entity
+public class Member {
+  @Id @GeneratedValue
+  private Long id;
+  private String name;
+
+  @Embedded 
+  Address homeAddress;
+  
+  @Embedded
+  @AttributeOverrides({
+    @AttributeOverride(name="city", column=@Column(name = "COMPANY_CITY")),
+    @AttributeOverride(name="street", column=@Column(name = "COMPANY_STREET")),
+    @AttributeOverride (name="zipcode", column=@Column (name = "COMPANY_ZIPCODE"))
+  })
+  Address companyAddress;
+}
+```
+
+<br/>
+
+### 값 타입과 불변 객체
+
+ - `값 타입 공유 참조 문제`
+    - 임베디드 타입 같은 값 타입을 여러 엔티티에서 공유하면 위험하다.
+    - 회원2의 주소만 "NewCity"로 변경 되길 기대했지만 회원1의 주소도 "NewCity"로 변경되어 버린다. 이런 부작용을 막으려면 값을 복사해서 사용하면 된다.
+```java
+member1.setHomeAddress(new Address("OldCity"));
+Address address = member1.getHomeAddress();
+
+address.setCity("NewCity");
+member2.setHomeAddress(address);
+```
+
+<br/>
+
+#### 값 타입 복사
+
+값 타입의 실제 인스턴스인 값을 공유하는 것은 위험하다. 그러나 임베디드 타입처럼 직접 정의한 값 타입은 기본 타입이 아니라 객체 타입이라는 것이다. 자바는 객체에 값을 대입하면 항상 참조값을 전달한다.  
+객체의 공유 참조는 피할 수 없다. 따라서 근본적인 해결책이 필요한데 가장 단순한 방법은 객체의 값을 수정하지 못하게 막으면 된다.  
+
+<br/>
+
+#### 불변 객체
+
+객체를 불변하게 만들면 값을 수정할 수 없으므로 부작용을 원천 차단할 수 있다. 따라서 값 타입은 될 수 있으면 불변 객체로 설계해야 한다. 한 번 만들면 절대 변경할 수 없는 객체를 불변 객체라 한다. 불변 객체의 값은 조회할 수 있지만 수정할 수 없다.  
+
+<br/>
+
+#### 값 타입의 비교
+
+Java에서 제공하는 객체 비교는 2가지이다.  
+ - 동일성(indentity) 비교 : 인스턴스의 참조 값을 비교, == 사용
+ - 동등성(Equivalence) 비교 : 인스턴스의 값을 비교, equals() 사용
+
+<br/>
+
+값 타입은 동일성은 서로 다른 인스턴스이므로 결과는 거짓이다. 그러나 동등성은 참이라는 결과를 반환하기 위해 equals() 메소드를 재정의 해야 한다.  
+ - 자바에서 equals()를 재정의하면 hashCode()도 재정의하는 것이 안전하다. 그렇지 않으면 해시를 사용하는 컬렉션(HashSet, HashMap)이 정상 동작하지 않는다.
+
+<br/>
+
+#### 값 타입 컬렉션
+
+값 타입을 하나 이상 저장 하려면 컬렉션에 보관하고 @ElementCollection, @CollectionTable 어노테이션을 사용하면 된다.
+
+ - FavoriteFoods는 기본값 타입인 String을 컬렉션으로 가진다. 이것은 데이터베이스 테이블로 매핑해야 하는데 관계형 데이터베이스의 테이블은 컬럼 안에 컬렉션을 포함할 수 없다. 따라서 별도의 테이블을 추가하고 @CollectionTable를 사용해서 추가한 테이블을 매핑 해야 한다.
+```java
+@Entity
+public class Member {
+  @Id @GeneratedValue
+  private Long id;
+  
+  @Embedded
+  private Address homeAddress;
+
+  @ElementCollection
+  @CollectionTable(
+    name = "FAVORITE_FOODS",
+    joinColumns = @JoinColumn(name = "MEMBER_ID"))
+  @Column(name="FOOD_NAME")
+  private Set<String> favoriteFoods = new HashSet<String>();
+
+  @ElementCollection
+  @CollectionTable(
+    name = "ADDRESS", 
+    joinColumns = @JoinColumn(name = "MEMBER_ID"))
+  private List<Address> addressHistory = new ArrayList<Address>();
+  //...
+}
+
+@Embeddable
+public class Address {
+  @Column
+  private String city;
+  private String street;
+  private String zipcode
+  //...
+}
+```
+
+ - `값 타입 컬렉션 사용`
+    - 등록하는 코드를 보면 마지막에 member 엔티티만 영속화했다. 따라서 em.persist(member) 한 번 호출로 총 6번의 INSERT SQL을 실행한다.
+    - 값 타입 컬렉션은 영속성 전이(Cascade) + 고아 객체 제거(ORPHAN REMOVE) 기능을 필수로 가진다고 볼 수 있다.
+```java
+Member member = new Member();
+
+//임베디드 값 타입
+member.setHomeAddress(new Address("통영", "몽돌해수욕장" "660-123"));
+
+//기본값 타입 컬렉션
+member.getFavoriteFoods().add("쌈뽕");
+member.getFavoriteFoods().add("짜장");
+member.getFavoriteFoods().add("탕수육");
+
+//임베디드 값 타입 컬렉션
+member.getAddressHistory().add(new Address("서울", "강남"，"123-123"));
+member.getAddressHistory().add(new Address("서울", "강북", "000-000"》);
+em.persist(member);
+
+/*
+INSERT INTO MEMBER (ID, CITY, STREET, ZIPCODE) VALUES (1, "통영","몽돌해수욕장","660-123")
+
+INSERT INTO FAVORITE_FOODS (MEMBER_ID, FOOD_NAME) VALUES(1,"깜뽕")
+INSERT INTO FAVORITE_FOODS (MEMBER_ID, FOOD_NAME) VALUES(1 "짜장")
+INSERT INTO FAVORITE_FOODS (MEMBER_ID, FOOD_NAME) VALUES(1, "탕수육")
+
+INSERT INTO ADDRESS (MEMBER_ID, CITY, STREET, ZIPCODE) VALUES(1, "서울", "강남", "123-123")
+INSERT INTO ADDRESS (MEMBER_ID, CITY, STREET, ZIPCODE) VALUES(1, "서울", "강북", "000-000"
+/*
+```
+
+<br/>
+
+ - `값 타입 수정`
+    - __임베디드 값 타입 수정__: homeAddress 임베디드 값 타입은 MEMBER 테이블과 매핑 했으므로 MEMBER 테이블만 UPDATE한다. 사실 Member 엔티티를 수정하는 것과 같다.
+    - __기본값 타입 컬렉션 수정__: 탕수육을 치킨으로 변경 하려면 탕수육을 제거하고 치킨을 추가해야 한다. 자바의 String 타입은 수정할 수 없다.
+    - __임베디드 값 타입 컬렉션 수정__: 값 타입은 불변해야 한다. 따라서 컬렉션에서 기존 주소를 삭제하고 새로운 주소를 등록했다. 참고로 값 타입은 equals, hashcode를 꼭 구현해야 한다.
+```java
+Member member = em.find(Member. class, IL);
+
+// 1. 임베디드값 타입수정
+member.setHomeAddress(new Address("새로운도시", "신도시 1", "123456"));
+
+// 2. 기본값 타입컬렉션수정
+Set<String> favoriteFoods = member.getFavoriteFoods();
+favoriteFoods.remove("탕수육");
+favoriteFoods.add("치킨");
+
+// 3. 임베디드값 타입컬렉션수정
+List<Address> addressHistory = member.getAddressHistory();
+addressHistory.remove(new Address("서울", "기존주소", "123-123"));
+addressHistory.add(new Address("새로운도시", "새로운 주소", "123-456"));
+```
+
+<br/>
+
+### 값 타입 컬렉션의 제약사항
+값 타입은 식별자라는 개념이 없고 단순한 값 들의 모음이므로 값을 변경 해버리면 데이터베이스에 저장된 원본 데이터를 찾기는 어렵다.  
+
+JPA 구현체들은 값 타입 컬렉션에 변경 사항이 발생하면, 값 타입 컬렉션이 매핑된 테이블의 연관된 모든 데이터를 삭제하고, 현재 값 타입 컬렉션 객체에 있는 모든 값을 데이터베이스에 다시 저장한다.  
+
+따라서 실무에서는 값 타입 컬렉션이 매핑된 테이블에 데이터가 많다면 값 타입 컬렉션 대신에 일대다 관계를 고려해야 한다. 추가로 값 타입 컬렉션을 매핑하는 테이블은 모든 컬럼을 묶어서 기본 키를 구성해야 한다. 따라서 데이터베이스 기본 키 제약 조건으로 인해 컬럼에 null을 입력할 수 없고, 같은 값을 중복해서 저장할 수 없는 제약도 있다.  
+
+지금까지 설명한 문제를 해결하려면 값 타입 컬렉션을 사용하는 대신에 새로운 엔티티를 만들어서 일대다 관계로 설정하면 된다.  
+
+<br/>
+
+### 값 타입과 불변 객체 정리
+
+ - __엔티티 타입의 특징__
+    - 식별자가 있다.
+    - 생명 주기가 있다
+    - 공유할 수 있다.
+ - __값 타입의 특징__
+    - 식별자가 없다.
+    - 생명 주기를 엔티티에 의존한다.
+    - 공유하지 않는 것이 안전하다.
+
