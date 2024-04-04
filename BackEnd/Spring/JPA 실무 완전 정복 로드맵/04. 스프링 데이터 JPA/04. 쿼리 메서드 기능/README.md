@@ -401,3 +401,181 @@ public void bulkUpdate() throws Exception {
     assertThat(resultCount).isEqualTo(3);
 }
 ```
+<br/>
+
+## 9. EntityGraph
+
+Member와 Team은 지연 로딩 관계이다.  
+때문에, Member에서 Team을 접근할 때 N + 1 문제가 발생하게 된다.  
+
+```java
+@Test
+public void findMemberLazy() throws Exception {
+    //given
+    //member1 -> teamA
+    //member2 -> teamB
+
+    Team teamA = new Team("teamA");
+    Team teamB = new Team("teamB");
+    teamRepository.save(teamA);
+    teamRepository.save(teamB);
+    memberRepository.save(new Member("member1", 10, teamA));
+    memberRepository.save(new Member("member2", 20, teamB));
+    em.flush();
+    em.clear();
+
+    //when
+    List<Member> members = memberRepository.findAll();
+
+    //then
+    for (Member member : members) {
+        member.getTeam().getName();
+    }
+}
+```
+<br/>
+
+### 지연 로딩 여부 확인
+
+```java
+//Hibernate 기능으로 확인
+Hibernate.isInitialized(member.getTeam())
+
+//JPA 표준 방법으로 확인
+PersistenceUnitUtil util = em.getEntityManagerFactory().getPersistenceUnitUtil();
+util.isLoaded(member.getTeam());
+```
+<br/>
+
+### JPQL 패치 조인
+
+JPQL 문법으로 직접 쿼리를 작성하고, JOIN 대상에 FETCH 키워드를 정의하면, 지연 로딩하지 않고 한 번에 모든 정보를 조회하게 된다.  
+
+```java
+@Query("select m from Member m left join fetch m.team")
+List<Member> findMemberFetchJoin();
+```
+<br/>
+
+### EntityGraph
+
+스프링 데이터 JPA는 JPQL을 직접 정의하지 않고 N + 1 문제를 해결할 수 있는 방법을 제공한다.  
+@EntityGraph는 내부적으로 패치 조인을 사용하게 한다. 사실상 패치 조인의 간편 버전으로 LEFT OUTER JOIN을 사용한다.  
+
+```java
+public interface MemberRepository extends JpaRepository<Member, Long> {
+
+    // ..
+
+    //공통 메서드 오버라이드
+    @Override
+    @EntityGraph(attributePaths = {"team"})
+    List<Member> findAll();
+
+    //JPQL + 엔티티 그래프
+    @EntityGraph(attributePaths = {"team"})
+    @Query("select m from Member m")
+    List<Member> findMemberEntityGraph();
+
+    //메서드 이름으로 쿼리에서 특히 편리하다.
+    @EntityGraph(attributePaths = {"team"})
+    List<Member> findByUsername(String username)
+}
+```
+<br/>
+
+### NamedEntityGraph
+
+스프링 데이터 JPA의 @EntityGraph는 JPA의 @NamedEntityGraph 기능을 이용한 것이다.  
+ - 실무에서는 스프링 데이터 JPA가 제공하는 @EntityGraph에서 attributePaths 속성을 정의해서 사용한다.
+ - 그 외에 쿼리가 복잡해지면, JPQL의 패치 조인을 사용하거나 QueryDSL을 이용한다.
+
+```java
+/* Member 엔티티 */
+@NamedEntityGraph(name = "Member.all", attributeNodes =
+@NamedAttributeNode("team"))
+@Entity
+public class Member {
+    // ..
+}
+
+/* MemberRepository */
+public interface MemberRepository extends JpaRepository<Member, Long> {
+
+    // ..
+
+    @EntityGraph("Member.all")
+    @Query("select m from Member m")
+    List<Member> findMemberEntityGraph();
+
+}
+```
+<br/>
+
+## 10. JPA Hint & Lock
+
+JPA의 Hint는 SQL DB에 힌트가 아니라 JPA 구현체에게 제공하는 힌트를 말한다.  
+
+ - `readonly 힌트`
+    - readonly를 사용하면 읽기 전용으로 데이터를 조회한다.
+    - 때문에, 스냅샷을 만들지 않는다. 즉, 변경 감지가 동작하지 않는다.
+```java
+/* MemberRepository */
+public interface MemberRepository extends JpaRepository<Member, Long> {
+
+    // ..
+
+    @QueryHints(value = @QueryHint(name = "org.hibernate.readOnly", value = "true"))
+    Member findReadOnlyByUsername(String username);
+
+}
+
+/* 테스트 코드 */
+@Test
+public void queryHint() throws Exception {
+    //given
+    memberRepository.save(new Member("member1", 10));
+    em.flush();
+    em.clear();
+
+    //when
+    Member member = memberRepository.findReadOnlyByUsername("member1");
+    member.setUsername("member2");
+    em.flush(); //Update Query 실행X
+}
+```
+<br/>
+
+ - `Page 반환타입에 힌트 사용`
+    - forCounting : 반환 타입으로 Page 인터페이스를 적용하면 추가로 호출하는 페이징을 위한 count 쿼리도 쿼리 힌트 적용(기본값 true)
+```java
+/* MemberRepository */
+public interface MemberRepository extends JpaRepository<Member, Long> {
+
+    // ..
+
+    @QueryHints(
+        value = { 
+            @QueryHint(
+                name = "org.hibernate.readOnly", 
+                value = "true"
+            )
+        },
+        forCounting = true
+    )
+    Page<Member> findByUsername(String name, Pageable pageable);
+
+}
+```
+<br/>
+
+### Lock
+
+@Lock(LockModeType.PESSIMISTIC_WRITE)를 사용하면, DB에서 제공하는 비관적 락(Pessimistic Lock)을 사용하게 된다. (for update 문)  
+때문에, 트랜잭션이 종료하기 전까지 다른 곳에서 해당 행을 조회할 때 블로킹이 걸리게 된다.  
+실무에서 트래픽이 많은 곳에서는 비관적 락 보다는 버전 정보를 통해 낙관적 락(Optimistic Lock) 방식을 이용하는 것이 좋다.  
+
+```java
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+List<Member> findByUsername(String name);
+```
