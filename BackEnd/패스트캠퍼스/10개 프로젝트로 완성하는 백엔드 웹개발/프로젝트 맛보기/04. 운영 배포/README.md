@@ -20,13 +20,11 @@ scp -r /local/directory remote_username@1.1.1.1:/remote/directory
 
 ## 필수 리눅스 명령어
 
- - ``
-    - man: CLI 명령어에 대한 상세한 정보 제공
-    - lsof: 특정 포트에 정보 조회
-    - nslookup: DNS 값으로 IP 조회
-    - telnet: IP와 PORT 조합으로 현재 네트워크 환경에서 통신이 가능한지 체크
-    - netstat: 네트워크 상태 확인
-        - 
+- man: CLI 명령어에 대한 상세한 정보 제공
+- lsof: 특정 포트에 정보 조회
+- nslookup: DNS 값으로 IP 조회
+- telnet: IP와 PORT 조합으로 현재 네트워크 환경에서 통신이 가능한지 체크
+- netstat: 네트워크 상태 확인
 ```bash
 # man
 man telnet

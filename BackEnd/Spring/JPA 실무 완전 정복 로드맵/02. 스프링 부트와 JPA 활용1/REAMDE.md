@@ -1,4 +1,4 @@
-# 자바 ORM 표준 JPA 프로그래밍 - 기본편
+# 스프링 부트와 JPA 활용1
 
  - 인프런 주소: https://www.inflearn.com/course/스프링부트-JPA-활용-1/dashboard
 
