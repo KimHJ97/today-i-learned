@@ -121,4 +121,188 @@ docker build -t 아이디/application-project-test .
 # 이미지 컨테이너화
 docker run 아이디/application-project-test -p 8080:8080
 ```
+<br/>
+
+### 2-3. 개발환경과 운영환경 프로필 나누기
+
+Spring Profile 기능을 이용하여 애플리케이션 설정을 특정 환경에서만 적용하거나, 환경별로 다르게 적용할 수 있다.  
+Spring Boot는 애플리케이션이 실행될 때 자동으로 application.properties 파일을 찾는다.  
+
+```yml
+spring:
+  profiles:
+    active: local # default
+    group:
+      local:
+        - common
+      prod:
+        - common
+
+---
+spring:
+  config:
+    activate:
+      on-profile: common
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+```
+
+<br/>
+
+### 2-4. 도커를 이용한 다중 컨테이너 환경 구성하기
+
+```
+version: 도커 컴포즈 버전
+services: 실행하려는 컨테이너들 정의
+   pharmacy-recommendation-app: 서비스명 (같은 네트워크에 속한 컨테이너끼리 서비스명으로 접근 가능)
+     container_name: 컨테이너 이름
+     build: 도커 파일 위치 (dockerfile, context)
+     depends_on: 특정 컨테이너에 대한 의존관계
+     image: 컨테이너를 생성할 때 사용할 도커 이미지
+     environment: 환경 변수
+     volumes: 호스트디렉토리:컨테이너디렉토리
+     ports: 접근 포트 설정 (docker run -p 옵션과 같다.)
+     restart: 컨테이너 재실행 여부
+```
+<br/>
+
+#### 도커 파일 구성
+
+ - `redis/Dockerfile`
+    - Redis 이미지를 이용한다.
+```dockerfile
+FROM redis:6
+
+ENV TZ=Asia/Seoul
+```
+<br/>
+
+ - `database/Dockerfile`
+    - Maria DB 이미지를 이용한다.
+```dockerfile
+FROM mariadb:10
+
+ENV TZ=Asia/Seoul
+```
+<br/>
+
+ - `database/config/mariadb.cnf`
+    - 볼륨(Volume)을 이용하여 MariaDB 설정 파일에 적용한다.
+```cnf
+[client]
+default-character-set=utf8mb4
+
+[mysql]
+default-character-set=utf8mb4
+
+[mysqld]
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+skip-character-set-client-handshake
+
+[mysqldump]
+default-character-set=utf8mb4
+```
+<br/>
+
+ - `docker-compose-local.yml`
+    - 실행: docker-compose -f docker-compose-local.yml up
+    - 중지: docker-compose -f docker-compose-local.yml down
+```yml
+version: "3.8"
+services:
+  pharmacy-recommendation-redis:
+    container_name: pharmacy-recommendation-redis
+    build:
+      dockerfile: Dockerfile
+      context: ./redis
+    image: 아이디/pharmacy-recommendation-redis
+    ports:
+      - "6379:6379"
+  pharmacy-recommendation-database:
+    container_name: pharmacy-recommendation-database
+    build:
+      dockerfile: Dockerfile
+      context: ./database
+    image: 아이디/pharmacy-recommendation-database
+    environment:
+      - MARIADB_DATABASE=pharmacy-recommendation
+      - MARIADB_ROOT_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+    volumes:
+      - ./database/config:/etc/mysql/conf.d
+    ports:
+      - "3306:3306"
+```
+<br/>
+
+ - `docker-compose-local.yml을 docker cli로 적용하면`
+```bash
+# Redis 이미지 빌드
+docker build -t 아이디/pharmacy-recommendation-redis -f ./redis/Dockerfile ./redis
+
+# Redis 이미지 컨테이너화
+docker run -d \
+  --name pharmacy-recommendation-redis \
+  -p 6379:6379 \
+  아이디/pharmacy-recommendation-redis
+
+# MariaDB 이미지 빌드
+docker build -t 아이디/pharmacy-recommendation-database -f ./database/Dockerfile ./database
+
+# MariaDB 이미지 컨테이너화
+docker run -d \
+  --name pharmacy-recommendation-database \
+  -e MARIADB_DATABASE=pharmacy-recommendation \
+  -e MARIADB_ROOT_PASSWORD=${SPRING_DATASOURCE_PASSWORD} \
+  -v $(pwd)/database/config:/etc/mysql/conf.d \
+  -p 3306:3306 \
+  아이디/pharmacy-recommendation-database
+```
+<br/>
+
+#### Spring 외부 환경 변수
+
+ - `application.yml`
+    - local 환경에서 MariaDB DataSource와 Redis 연결을 설정해준다.
+    - 계정명과 비밀번호는 노출되면 안되는 값으로 .env 파일을 이용한다.
+```yml
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: jdbc:mariadb://localhost:3306/pharmacy-recommendation
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  redis:
+    host: localhost
+    port: 6379
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+```
+<br/>
+
+ - `.env`
+    - docker-compose를 띄울 때 루트 디렉토리의 '.env' 파일의 내용을 환경 변수로 설정한다. 이렇게 설정된 환경 변수는 docker-compose.yml 파일 내에서 사용할 수 있으며, Spring Application 외부 설정 값으로도 사용할 수 있다.
+        - Spring 외부 설정 값으로 사용할 때, 도커 컴포즈로 애플리케이션을 실행하면 정상적으로 값이 받아지지만, 로컬에서 실행할 때는 값이 없다. 때문에, 로컬 실행시에는 IntelliJ의 환경 변수를 등록한다.
+        - Edit Configuration > Modify options > Environment variable 설정
+    - 암호화를 통해 더 높은 보안을 제공하는 오픈 소스 HashiCorp  Vault를 이용할 수도 있다.
+```env
+SPRING_DATASOURCE_USERNAME=root 
+SPRING_DATASOURCE_PASSWORD=1234
+```
 
