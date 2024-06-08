@@ -73,3 +73,264 @@ public class KakaoAddressSearchService {
 ```
 <br/>
 
+## 약국 데이터 
+
+ - 공공포털 API: https://www.data.go.kr/data/15065023/fileData.do
+```
+/database/config/mariadb.cnf
+/database/init/direction.sql
+/database/init/pharmacy.sql
+```
+<br/>
+
+ - ``
+```yml
+version: "3.8"
+services:
+  pharmacy-recommendation-redis:
+    container_name: pharmacy-recommendation-redis
+    build:
+      dockerfile: Dockerfile
+      context: ./redis
+    image: zcx5674/pharmacy-recommendation-redis
+    ports:
+      - "6379:6379"
+  pharmacy-recommendation-database:
+    container_name: pharmacy-recommendation-database
+    build:
+      dockerfile: Dockerfile
+      context: ./database
+    image: mysql
+    environment:
+      - MARIADB_DATABASE=pharmacy-recommendation
+      - MARIADB_ROOT_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+    volumes:
+      - ./database/config:/etc/mysql/conf.d
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+```
+<br/>
+
+## 거리계산 알고리즘 구현
+
+### Haversine Formula
+
+Haversine formula 알고리즘은 지구를 완전한 구 라고 가정하고 계산하기 때문에  
+0.5% 정도 오차가 발생 가능  
+
+ - https://en.wikipedia.org/wiki/Haversine_formula
+ - 두 위도, 경도 사이의 거리를 계산하기 위한 알고리즘 
+```java
+    // Haversine formula
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        lat1 = Math.toRadians(lat1);
+        lon1 = Math.toRadians(lon1);
+        lat2 = Math.toRadians(lat2);
+        lon2 = Math.toRadians(lon2);
+
+        double earthRadius = 6371; //Kilometers
+        return earthRadius * Math.acos(Math.sin(lat1) * Math.sin(lat2) + Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon1 - lon2));
+    }
+```
+<br/>
+
+### 코드
+
+ - `Direction`
+```java
+@Entity(name = "direction")
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+@Getter
+public class Direction extends BaseTimeEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // 고객
+    private String inputAddress;
+    private double inputLatitude;
+    private double inputLongitude;
+
+    // 약국
+    private String targetPharmacyName;
+    private String targetAddress;
+    private double targetLatitude;
+    private double targetLongitude;
+
+    // 고객 주소 와 약국 주소 사이의 거리
+    private double distance;
+}
+```
+<br/>
+
+ - `DirectionService`
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DirectionService {
+
+    private final PharmacySearchService pharmacySearchService;
+
+    public List<Direction> buildDirectionList(DocumentDto documentDto) {
+
+        // 약국 데이터 조회
+        List<PharmacyDto> pharmacyDtos = pharmacySearchService.searchPharmacyDtoList();
+
+        // 거리계산 알고리즘을 이용하여, 고객과 약국 사이의 거리를 계산하고 sort
+
+        // 다음 강의에서 진행
+        return Collections.emptyList();
+    }
+
+    // Haversine formula
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        lat1 = Math.toRadians(lat1);
+        lon1 = Math.toRadians(lon1);
+        lat2 = Math.toRadians(lat2);
+        lon2 = Math.toRadians(lon2);
+
+        double earthRadius = 6371; //Kilometers
+        return earthRadius * Math.acos(Math.sin(lat1) * Math.sin(lat2) + Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon1 - lon2));
+    }
+}
+```
+<br/>
+
+ - `PharmacySearchService`
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PharmacySearchService {
+
+    private final PharmacyRepositoryService pharmacyRepositoryService;
+
+    public List<PharmacyDto> searchPharmacyDtoList() {
+
+        // redis
+
+        // db
+        return pharmacyRepositoryService.findAll()
+                .stream()
+                .map(this::convertToPharmacyDto)
+                .collect(Collectors.toList());
+    }
+
+    private PharmacyDto convertToPharmacyDto(Pharmacy pharmacy) {
+
+        return PharmacyDto.builder()
+                .id(pharmacy.getId())
+                .pharmacyAddress(pharmacy.getPharmacyAddress())
+                .pharmacyName(pharmacy.getPharmacyName())
+                .latitude(pharmacy.getLatitude())
+                .longitude(pharmacy.getLongitude())
+                .build();
+    }
+}
+```
+<br/>
+
+#### 테스트 코드
+
+ - `DirectionServiceTest`
+```groovy
+import com.example.project.api.dto.DocumentDto
+import com.example.project.api.service.KakaoCategorySearchService
+import com.example.project.direction.entity.Direction
+import com.example.project.direction.repository.DirectionRepository
+import com.example.project.pharmacy.dto.PharmacyDto
+import com.example.project.pharmacy.service.PharmacySearchService
+import spock.lang.Specification
+
+class DirectionServiceTest extends Specification {
+
+    private PharmacySearchService pharmacySearchService = Mock()
+    private DirectionRepository directionRepository = Mock()
+    private KakaoCategorySearchService kakaoCategorySearchService = Mock()
+    private Base62Service base62Service = Mock()
+
+    private DirectionService directionService = new DirectionService(
+            pharmacySearchService, directionRepository, kakaoCategorySearchService,base62Service)
+
+    private List<PharmacyDto> pharmacyList
+
+    def setup() {
+        pharmacyList = new ArrayList<>()
+        pharmacyList.addAll(
+                PharmacyDto.builder()
+                        .id(1L)
+                        .pharmacyName("돌곶이온누리약국")
+                        .pharmacyAddress("주소1")
+                        .latitude(37.61040424)
+                        .longitude(127.0569046)
+                        .build(),
+                PharmacyDto.builder()
+                        .id(2L)
+                        .pharmacyName("호수온누리약국")
+                        .pharmacyAddress("주소2")
+                        .latitude(37.60894036)
+                        .longitude(127.029052)
+                        .build()
+        )
+    }
+
+    def "buildDirectionList - 결과 값이 거리 순으로 정렬이 되는지 확인"() {
+        given:
+        def addressName = "서울 성북구 종암로10길"
+        double inputLatitude = 37.5960650456809
+        double inputLongitude = 127.037033003036
+
+        def documentDto = DocumentDto.builder()
+                .addressName(addressName)
+                .latitude(inputLatitude)
+                .longitude(inputLongitude)
+                .build()
+
+        when:
+        pharmacySearchService.searchPharmacyDtoList() >> pharmacyList
+
+        def results = directionService.buildDirectionList(documentDto)
+
+        then:
+        results.size() == 2
+        results.get(0).targetPharmacyName == "호수온누리약국"
+        results.get(1).targetPharmacyName == "돌곶이온누리약국"
+    }
+
+    def "buildDirectionList - 정해진 반경 10 km 내에 검색이 되는지 확인"() {
+        given:
+        pharmacyList.add(
+                PharmacyDto.builder()
+                        .id(3L)
+                        .pharmacyName("경기약국")
+                        .pharmacyAddress("주소3")
+                        .latitude(37.3825107393401)
+                        .longitude(127.236707811313)
+                        .build())
+
+        def addressName = "서울 성북구 종암로10길"
+        double inputLatitude = 37.5960650456809
+        double inputLongitude = 127.037033003036
+
+        def documentDto = DocumentDto.builder()
+                .addressName(addressName)
+                .latitude(inputLatitude)
+                .longitude(inputLongitude)
+                .build()
+
+        when:
+        pharmacySearchService.searchPharmacyDtoList() >> pharmacyList
+
+        def results = directionService.buildDirectionList(documentDto)
+
+        then:
+        results.size() == 2
+        results.get(0).targetPharmacyName == "호수온누리약국"
+        results.get(1).targetPharmacyName == "돌곶이온누리약국"
+    }
+}
+```
