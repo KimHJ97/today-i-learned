@@ -334,3 +334,197 @@ class DirectionServiceTest extends Specification {
     }
 }
 ```
+<br/>
+
+## 추천 결과 저장 기능 구현
+
+ - `DirectionRepository`
+```java
+public interface DirectionRepository extends JpaRepository<Direction, Long> {
+}
+```
+<br/>
+
+ - `DirectionService`
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DirectionService {
+
+    private static final int MAX_SEARCH_COUNT = 3; // 약국 최대 검색 갯수
+    private static final double RADIUS_KM = 10.0; // 반경 10 km
+
+    private final PharmacySearchService pharmacySearchService;
+    private final DirectionRepository directionRepository;
+
+    @Transactional
+    public List<Direction> saveAll(List<Direction> directionList) {
+        if(CollectionUtils.isEmpty(directionList)) return Collections.emptyList();
+        return directionRepository.saveAll(directionList);
+    }
+
+
+}
+```
+<br/>
+
+ - `PharmacyRecommendationService`
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PharmacyRecommendationService {
+
+    private final KakaoAddressSearchService kakaoAddressSearchService;
+    private final DirectionService directionService;
+
+    public List<OutputDto> recommendPharmacyList(String address) {
+
+        KakaoApiResponseDto kakaoApiResponseDto = kakaoAddressSearchService.requestAddressSearch(address);
+
+        // 조회된 결과가 없는 경우 emptyList 반환
+        if(Objects.isNull(kakaoApiResponseDto) || CollectionUtils.isEmpty(kakaoApiResponseDto.getDocumentList())) {
+            log.error("[PharmacyRecommendationService recommendPharmacyList fail] Input address: {}", address);
+            return Collections.emptyList();
+        }
+
+        DocumentDto documentDto = kakaoApiResponseDto.getDocumentList().get(0);
+
+        // 공공기관 약국 데이터 및 거리계산 알고리즘 이용
+        List<Direction> directionList = directionService.buildDirectionList(documentDto);
+
+        return directionService.saveAll(directionList)
+                .stream()
+                .map(this::convertToOutputDto)
+                .collect(Collectors.toList());        
+    }
+
+    private OutputDto convertToOutputDto(Direction direction) {
+
+        return OutputDto.builder()
+                .pharmacyName(direction.getTargetPharmacyName())
+                .pharmacyAddress(direction.getTargetAddress())
+                .directionUrl(baseUrl + base62Service.encodeDirectionId(direction.getId()))
+                .roadViewUrl(ROAD_VIEW_BASE_URL + direction.getTargetLatitude() + "," + direction.getTargetLongitude())
+                .distance(String.format("%.2f km", direction.getDistance()))
+                .build();
+    }
+}
+```
+<br/>
+
+## 카카오 키워드 장소 검색 API
+
+ - `KakaoUriBuilderService`
+```java
+@Slf4j
+@Service
+public class KakaoUriBuilderService {
+
+    private static final String KAKAO_LOCAL_SEARCH_ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json";
+
+    private static final String KAKAO_LOCAL_CATEGORY_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/category.json";
+
+
+    public URI buildUriByAddressSearch(String address) {
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromHttpUrl(KAKAO_LOCAL_SEARCH_ADDRESS_URL);
+        uriBuilder.queryParam("query", address);
+
+        URI uri = uriBuilder.build().encode().toUri();
+        log.info("[KakaoUriBuilderService buildUriByAddressSearch] address: {}, uri: {}", address, uri);
+
+        return uri;
+    }
+
+    public URI buildUriByCategorySearch(double latitude, double longitude, double radius, String category) {
+
+        double meterRadius = radius * 1000;
+
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromHttpUrl(KAKAO_LOCAL_CATEGORY_SEARCH_URL);
+        uriBuilder.queryParam("category_group_code", category);
+        uriBuilder.queryParam("x", longitude);
+        uriBuilder.queryParam("y", latitude);
+        uriBuilder.queryParam("radius", meterRadius);
+        uriBuilder.queryParam("sort","distance");
+
+        URI uri = uriBuilder.build().encode().toUri();
+
+        log.info("[KakaoAddressSearchService buildUriByCategorySearch] uri: {} ", uri);
+
+        return uri;
+    }
+}
+```
+<br/>
+
+ - `KakaoCategorySearchService`
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class KakaoCategorySearchService {
+
+    private final KakaoUriBuilderService kakaoUriBuilderService;
+
+    private final RestTemplate restTemplate;
+
+    private static final String PHARMACY_CATEGORY = "PM9"; // 약국 카테고리
+
+    @Value("${kakao.rest.api.key}")
+    private String kakaoRestApiKey;
+
+    public KakaoApiResponseDto requestPharmacyCategorySearch(double latitude, double longitude, double radius) {
+
+        URI uri = kakaoUriBuilderService.buildUriByCategorySearch(latitude, longitude, radius, PHARMACY_CATEGORY);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, "KakaoAK "+ kakaoRestApiKey);
+        HttpEntity httpEntity = new HttpEntity<>(headers);
+
+        return restTemplate.exchange(uri, HttpMethod.GET, httpEntity, KakaoApiResponseDto.class).getBody();
+    }
+}
+```
+<br/>
+
+ - ``
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DirectionService {
+
+    private static final int MAX_SEARCH_COUNT = 3; // 약국 최대 검색 갯수
+    private static final double RADIUS_KM = 10.0; // 반경 10 km
+    private static final String DIRECTION_BASE_URL = "https://map.kakao.com/link/map/";
+
+    private final PharmacySearchService pharmacySearchService;
+    private final DirectionRepository directionRepository;
+    private final KakaoCategorySearchService kakaoCategorySearchService;
+
+    // pharmacy search by category kakao api
+    public List<Direction> buildDirectionListByCategoryApi(DocumentDto inputDocumentDto) {
+        if(Objects.isNull(inputDocumentDto)) return Collections.emptyList();
+
+        return kakaoCategorySearchService
+                .requestPharmacyCategorySearch(inputDocumentDto.getLatitude(), inputDocumentDto.getLongitude(), RADIUS_KM)
+                .getDocumentList()
+                .stream().map(resultDocumentDto ->
+                        Direction.builder()
+                                .inputAddress(inputDocumentDto.getAddressName())
+                                .inputLatitude(inputDocumentDto.getLatitude())
+                                .inputLongitude(inputDocumentDto.getLongitude())
+                                .targetPharmacyName(resultDocumentDto.getPlaceName())
+                                .targetAddress(resultDocumentDto.getAddressName())
+                                .targetLatitude(resultDocumentDto.getLatitude())
+                                .targetLongitude(resultDocumentDto.getLongitude())
+                                .distance(resultDocumentDto.getDistance() * 0.001) // km 단위
+                                .build())
+                .limit(MAX_SEARCH_COUNT)
+                .collect(Collectors.toList());
+    }
+
+}
+```
+

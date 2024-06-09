@@ -1,4 +1,4 @@
-# IT 서비스 회사에서 사용하는 진짜 프로젝트 맛보기
+# 약국 길찾기 서비스
 
  - Handlebars를 이용한 View 구성
  - Docker 및 Docker-Compose를 이용한 클라우드 서비스 배포
@@ -11,6 +11,7 @@
 ## 참고 자료
 
  - 깃허브 주소: https://github.com/topics/fastcampus-pharmacy-recommendation
+ - 깃허브 블로그: https://wonyong-jang.github.io/
 
 <br/>
 
