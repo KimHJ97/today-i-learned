@@ -1,0 +1,23 @@
+<div class="modal fade" id="newpost">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>포스트 생성하기</h5>
+                <button type="button" class="btn-close close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/posts" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <textarea name="desc" id="desc" class="form-control" row="6" cols="50" placeholder="<%= currentUser.username %>님의 생각을 적어주세요." required></textarea>
+                    </div>
+                    <div class="form-group mt-1">
+                        <input class="form-control" type="file" name="image">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">생성하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

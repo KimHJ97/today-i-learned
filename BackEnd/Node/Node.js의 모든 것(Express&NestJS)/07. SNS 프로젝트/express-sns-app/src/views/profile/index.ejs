@@ -1,0 +1,71 @@
+<%- include('../partials/header') %>
+
+<div class="container col-lg-8">
+    <div class="text-center">
+        <h3><%= user.firstName %> <%= user.lastName %></h3>
+        <p class="text-dark"> <%= user.bio %></p>
+    </div>
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card mb-2">
+                <div class="card-body">
+                    <p>유저 정보</p>
+                </div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="fa fa-map-marker fa-lg"></i>
+                        <span class="ms-2"><%= user.hometown %></span>
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fa fa-briefcase fa-lg"></i>
+                        <span class="ms-2"><%= user.workspace %></span>
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fa fa-book fa-lg"></i>
+                        <span class="ms-2"><%= user.education %></span>
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fa fa-phone fa-lg"></i>
+                        <span class="ms-2"><%= user.contact %></span>
+                    </li>
+                </ul>
+                <% if (currentUser._id.toString() === user._id.toString()) { %>
+                    <div class="card-body text-center">
+                        <a href="/profile/<%= user._id %>/edit" class="btn btn-secondary btn-block">
+                            <i class="fa fa-pencil"></i> 프로필 수정하기
+                        </a>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <% if (currentUser._id.toString() === user._id.toString()) { %>
+             <div class="mb-2">
+                <%- include('../partials/create-post') %>
+             </div>
+            <% } %>
+             <div class="mb-2">
+                <div class="card">
+                    <div class="card-body">
+                        <p>포스트</p>
+                    </div>
+                </div>
+             </div>
+             <div>
+                <% posts.forEach((post) => { %>
+                    <%- include('../partials/post-item', {post: post}) %>
+                <% }) %>
+             </div>
+
+        </div>
+    </div>
+
+
+</div>
+
+<%- include('../partials/post-modal') %>
+
+<%- include('../partials/footer') %>
+

@@ -1,0 +1,24 @@
+<%- include('../partials/header') %>
+<div class="container">
+
+    <div style="max-width: 600px; margin: 1rem auto;">
+        <%- include('../partials/create-post') %>
+    </div>
+    <% posts.forEach((post) => { %>
+        <!-- 나의 포스트인지 -->
+        <% if (post.author.id.equals(currentUser._id) || 
+        // 나의 친구의 포스트인지
+        currentUser.friends.find(friend => friend === post.author.id.toString())) { %>
+        
+        <div style="max-width: 600px; margin: 1rem auto;">
+            <%- include('../partials/post-item', { post: post }) %>        
+        </div>
+
+        <% } %>
+    <% }) %>
+
+</div>
+
+<%- include('../partials/post-modal') %>
+
+<%- include('../partials/footer') %>
