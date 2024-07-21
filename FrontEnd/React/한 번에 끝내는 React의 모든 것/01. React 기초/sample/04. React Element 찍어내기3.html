@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<body>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const rootElement = document.getElementById("root");
+        const Paint = ({title, description}) => (
+            <>
+                <h1>{title}</h1>
+                <h3>{description}</h3>
+            </>
+        );
+
+        const element = (
+            <>
+                <Paint title="Good" description="좋다"/>
+                <Paint title="Bad" description="나쁘다"/>
+                <Paint title="So so" description="보통"/>
+            </>
+        );
+
+        ReactDOM.render(element, rootElement);
+    </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<body>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <div id="root"></div>
+
+<!-- JS 코드
+    <script>
+        const rootElement = document.getElementById("root");
+        function random() {
+            const number = Math.floor(Math.random() * (10 - 1) + 1);
+            const element = `
+                <button>${number}</button>
+            `;
+            rootElement.innerHTML = element;
+        }
+
+        setInterval(random, 1000);
+    </script>
+-->
+    <!-- React 코드 -->
+    <script type="text/babel">
+        const rootElement = document.getElementById("root");
+        function random() {
+            const number = Math.floor(Math.random() * (10 - 1) + 1);
+            const element = <button>{number}</button>;
+            ReactDOM.render(element, rootElement);
+        }
+
+        setInterval(random, 1000);
+    </script>
+</body>
+</html>

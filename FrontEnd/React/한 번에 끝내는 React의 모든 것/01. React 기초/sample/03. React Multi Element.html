@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<body>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const rootElement = document.getElementById("root");
+        const element = (
+            <div 
+                children={
+                    [
+                        React.createElement("h1", null, "Hi"),
+                        React.createElement("h3", null, "Bye")
+                    ]
+                } 
+            />
+        );
+
+        const element2 = (
+            <React.Fragment
+                children={
+                    [
+                        React.createElement("h1", null, "Hi"),
+                        React.createElement("h3", null, "Bye")
+                    ]
+                } 
+            />
+        );
+
+        const element3 = (
+            <React.Fragment
+                children={
+                    [
+                        <h1>Hi</h1>,
+                        <h3>Bye</h3>
+                    ]
+                }
+            />
+        );
+
+        const element4 = (
+            <React.Fragment>
+                {[<h1>Hi</h1>, <h3>Bye</h3>]}
+            </React.Fragment>
+        );
+
+        const element5 = (
+            <React.Fragment>
+                <h1>Hi</h1>
+                <h3>Bye</h3>
+            </React.Fragment>
+        );
+
+        const element6 = (
+            <>
+                <h1>Hi</h1>
+                <h3>Bye</h3>
+            </>
+        );
+
+        ReactDOM.render(element5, rootElement);
+    </script>
+</body>
+</html>

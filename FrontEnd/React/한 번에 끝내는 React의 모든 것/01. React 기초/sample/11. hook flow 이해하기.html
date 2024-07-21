@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<body>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const rootElement = document.getElementById("root");
+
+        const Child = () => {
+            console.log("       Child render start");
+            const [text, setText] = React.useState(() => {
+                console.log("       Child useState");
+                return "";
+            });
+
+            React.useEffect(() => {
+                console.log("       Child useEffect, no depts");
+            });
+
+            React.useEffect(() => {
+                console.log("       Child useEffect, empty depts");
+            }, []);
+
+            React.useEffect(() => {
+                console.log("       Child useEffect, [text]");
+            }, [text]);
+
+            function handleChange(event) {
+                setText(event.target.value);
+            }
+
+            const element =  (
+                <>
+                    <input onChange={handleChange}/>
+                    <p></p>
+                </>
+            );
+            console.log("       Child render end");
+
+            return element;
+        }
+
+        const App = () => {
+            const [show, setShow] = React.useState(() => {
+                console.log("App useState");
+                return false;
+            });
+
+            React.useEffect(() => {
+                console.log("App useEffect, no deps");
+            });
+            React.useEffect(() => {
+                console.log("App useEffect, empty deps");
+            }, []);
+            React.useEffect(() => {
+                console.log("App useEffect, [show]");
+            }, [show]);
+
+            function handleClick() {
+                setShow(prev => !prev);
+            }
+            
+            console.log("App render end");
+
+            return (
+                <>
+                    <button onClick={handleClick}>Search</button>
+                    {show ? <Child/> : null}
+                </>
+            );
+        }
+
+        ReactDOM.render(<App/>, rootElement);
+    </script>
+</body>
+</html>
