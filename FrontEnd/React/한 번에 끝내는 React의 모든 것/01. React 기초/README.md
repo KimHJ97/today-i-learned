@@ -486,3 +486,9 @@ useState나 useEffect가 반복 사용되는 경우 함수를 따로 정의하�
 ```
 <br/>
 
+## hook flow
+
+ - useEffect: 렌더가 끝난 뒤에 수행
+ - update시: useEffect clean up, useEffect
+ - dependency array: 전달받은 값의 변화가 있는 경우에만 수행
+
