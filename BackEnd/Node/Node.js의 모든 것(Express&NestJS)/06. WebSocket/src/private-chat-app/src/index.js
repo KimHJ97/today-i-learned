@@ -15,7 +15,7 @@ app.use(express.static(publicDirectory));
 app.use(express.json());
 
 mongoose.set('strictQuery', false);
-mongoose.connect('mongodb+srv://johnahn:qwer1234@express-cluster.kkwx50m.mongodb.net/?retryWrites=true&w=majority')
+mongoose.connect('URL')
     .then(() => console.log('디비 연결 성공!'))
     .catch(err => console.error(err))
 

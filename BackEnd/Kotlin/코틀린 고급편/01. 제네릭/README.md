@@ -156,3 +156,10 @@ cage2.put(Carp("잉어")) // Fish에 잉어를 넣을 수 있다.
 cage2.moveFrom(goldFishCage) // 잉어를 금붕어로 옮기는 것은 불가능하다.
 ```
 
+<br/>
+
+ - `Java와 Kotlin`
+```
+<out T> = <? extends T>
+<in T> = <? super T>
+```
