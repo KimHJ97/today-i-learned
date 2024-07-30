@@ -385,3 +385,284 @@ public class PartnerStoreImpl implements PartnerStore {
 	}
 }
 ```
+
+## 2. Application, Interface 구현
+
+### 공통 클래스
+
+ - `/common/response/CommonControllerAdvice`
+	- 공통 예외 처리 핸들러
+```java
+@Slf4j
+@ControllerAdvice
+public class CommonControllerAdvice {
+
+    private static final List<ErrorCode> SPECIFIC_ALERT_TARGET_ERROR_CODE_LIST = Lists.newArrayList();
+
+    /**
+     * http status: 500 AND result: FAIL
+     * 시스템 예외 상황. 집중 모니터링 대상
+     *
+     * @param e
+     * @return
+     */
+    @ResponseBody
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    @ExceptionHandler(value = Exception.class)
+    public CommonResponse onException(Exception e) {
+        String eventId = MDC.get(CommonHttpRequestInterceptor.HEADER_REQUEST_UUID_KEY);
+        log.error("eventId = {} ", eventId, e);
+        return CommonResponse.fail(ErrorCode.COMMON_SYSTEM_ERROR);
+    }
+
+    /**
+     * http status: 200 AND result: FAIL
+     * 시스템은 이슈 없고, 비즈니스 로직 처리에서 에러가 발생함
+     *
+     * @param e
+     * @return
+     */
+    @ResponseBody
+    @ResponseStatus(HttpStatus.OK)
+    @ExceptionHandler(value = BaseException.class)
+    public CommonResponse onBaseException(BaseException e) {
+        String eventId = MDC.get(CommonHttpRequestInterceptor.HEADER_REQUEST_UUID_KEY);
+        if (SPECIFIC_ALERT_TARGET_ERROR_CODE_LIST.contains(e.getErrorCode())) {
+            log.error("[BaseException] eventId = {}, cause = {}, errorMsg = {}", eventId, NestedExceptionUtils.getMostSpecificCause(e), NestedExceptionUtils.getMostSpecificCause(e).getMessage());
+        } else {
+            log.warn("[BaseException] eventId = {}, cause = {}, errorMsg = {}", eventId, NestedExceptionUtils.getMostSpecificCause(e), NestedExceptionUtils.getMostSpecificCause(e).getMessage());
+        }
+        return CommonResponse.fail(e.getMessage(), e.getErrorCode().name());
+    }
+
+    /**
+     * 예상치 않은 Exception 중에서 모니터링 skip 이 가능한 Exception 을 처리할 때
+     * ex) ClientAbortException
+     *
+     * @param e
+     * @return
+     */
+    @ResponseBody
+    @ResponseStatus(HttpStatus.OK)
+    @ExceptionHandler(value = {ClientAbortException.class})
+    public CommonResponse skipException(Exception e) {
+        String eventId = MDC.get(CommonHttpRequestInterceptor.HEADER_REQUEST_UUID_KEY);
+        log.warn("[skipException] eventId = {}, cause = {}, errorMsg = {}", eventId, NestedExceptionUtils.getMostSpecificCause(e), NestedExceptionUtils.getMostSpecificCause(e).getMessage());
+        return CommonResponse.fail(ErrorCode.COMMON_SYSTEM_ERROR);
+    }
+
+    /**
+     * http status: 400 AND result: FAIL
+     * request parameter 에러
+     *
+     * @param e
+     * @return
+     */
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(value = {MethodArgumentNotValidException.class})
+    public CommonResponse methodArgumentNotValidException(MethodArgumentNotValidException e) {
+        String eventId = MDC.get(CommonHttpRequestInterceptor.HEADER_REQUEST_UUID_KEY);
+        log.warn("[BaseException] eventId = {}, errorMsg = {}", eventId, NestedExceptionUtils.getMostSpecificCause(e).getMessage());
+        BindingResult bindingResult = e.getBindingResult();
+        FieldError fe = bindingResult.getFieldError();
+        if (fe != null) {
+            String message = "Request Error" + " " + fe.getField() + "=" + fe.getRejectedValue() + " (" + fe.getDefaultMessage() + ")";
+            return CommonResponse.fail(message, ErrorCode.COMMON_INVALID_PARAMETER.name());
+        } else {
+            return CommonResponse.fail(ErrorCode.COMMON_INVALID_PARAMETER.getErrorMsg(), ErrorCode.COMMON_INVALID_PARAMETER.name());
+        }
+    }
+}
+```
+
+ - `CommonResponse`
+	- 공통 응답 클래스
+```java
+@Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CommonResponse<T> {
+    private Result result;
+    private T data;
+    private String message;
+    private String errorCode;
+
+    public static <T> CommonResponse<T> success(T data, String message) {
+        return (CommonResponse<T>) CommonResponse.builder()
+                .result(Result.SUCCESS)
+                .data(data)
+                .message(message)
+                .build();
+    }
+
+    public static <T> CommonResponse<T> success(T data) {
+        return success(data, null);
+    }
+
+    public static CommonResponse fail(String message, String errorCode) {
+        return CommonResponse.builder()
+                .result(Result.FAIL)
+                .message(message)
+                .errorCode(errorCode)
+                .build();
+    }
+
+    public static CommonResponse fail(ErrorCode errorCode) {
+        return CommonResponse.builder()
+                .result(Result.FAIL)
+                .message(errorCode.getErrorMsg())
+                .errorCode(errorCode.name())
+                .build();
+    }
+
+    public enum Result {
+        SUCCESS, FAIL
+    }
+}
+```
+<br/>
+
+### Application 계층
+
+ - `/domain/notification/NotificaationService`
+	- 알림 전송 서비스 인터페이스
+```java
+public interface NotificationService {
+	void sendEmail(String email, String title, String description);
+	void sendKakao(String phoneNo, String description);
+	void sendSms(String phoneNo, String description);
+}
+```
+
+ - `/infrastructure/notification/NotificationExecutore`
+	- 알림 전송 서비스 구현체
+```java
+@Slf4j
+@Component
+public class NotificationExecutore implements NotificationService {
+
+	@Override
+	public void sendEmail(String email, String title, String description) {
+		log.info("sendEmail");
+	}
+
+	@Override
+	public void sendKakao(String phoneNo, String description) {
+		log.info("sendKakao");
+	}
+
+	@Override
+	public void sendSms(String phoneNo, String description) {
+		log.info("sendSms");
+	}
+}
+```
+
+ - `/application/partner/PartnerFacade`
+	- 응용 레벨은 XxxFacade로 네이밍한다.
+	- 파트너 등록과 알림 전송은 별도의 로직으로 수행된다.
+	- 파트너 등록은 하나의 트랜잭션에서 처리되어야 하고, 알림 전송은 성공, 실패에 대한 정합성이 필요없다.
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PartnerFacade {
+	private final PartnerService partnerService;
+	private final NotificationService notificationService;
+
+	public PartnerInfo registerPartner(PartnerCommand command) {
+		var partnerInfo = partnerService.registerPartner(command);
+		notificationService.sendEmail(partnerInfo.getEmail(), "title", "description");
+		return partnerInfo;
+	}
+}
+```
+<br/>
+
+### Interface 계층
+
+ - `/interfaces/partner/PartnerDto`
+	- 인터페이스 계층에서 사용될 Dto
+	- static inner class를 이용한다.
+	- XxxRequest 클래스에서 toCommand()로 서비스로 전송될 객체로 변환한다.
+	- XxxResponse 클래스 생성자로 XxxInfo 객체를 받아서 서비스에서 해당 인터페이스 응답 객체로 변환한다.
+```java
+public class PartnerDto {
+
+    @Getter
+    @Setter
+    @ToString
+    public static class RegisterRequest {
+        @NotEmpty(message = "partnerName 는 필수값입니다")
+        private String partnerName;
+
+        @NotEmpty(message = "businessNo 는 필수값입니다")
+        private String businessNo;
+
+        @Email(message = "email 형식에 맞아야 합니다")
+        @NotEmpty(message = "email 는 필수값입니다")
+        private String email;
+
+        public PartnerCommand toCommand() {
+            return PartnerCommand.builder()
+                    .partnerName(partnerName)
+                    .businessNo(businessNo)
+                    .email(email)
+                    .build();
+        }
+    }
+
+    @Getter
+    @ToString
+    public static class RegisterResponse {
+        private final String partnerToken;
+        private final String partnerName;
+        private final String businessNo;
+        private final String email;
+        private final Partner.Status status;
+
+        public RegisterResponse(PartnerInfo partnerInfo) {
+            this.partnerToken = partnerInfo.getPartnerToken();
+            this.partnerName = partnerInfo.getPartnerName();
+            this.businessNo = partnerInfo.getBusinessNo();
+            this.email = partnerInfo.getEmail();
+            this.status = partnerInfo.getStatus();
+        }
+    }
+}
+```
+
+ - `/interfaces/partner/PartnerApiController`
+```java
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/partners")
+public class PartnerApiController {
+	private final PartnerFacade partnerFacade;
+
+	@PostMapping
+	public CommonResponse registerPartner(@RequestBody @Valid PartnerDto.RegisterRequest request) {
+		var command = request.toCommand();
+		var partnerInfo = partnerFacade.registerPartner(command);
+		var response = new PartnerDto.RegisterResponse(partnerInfo);
+		return CommonResponse.success(response);
+	}
+}
+```
+<br/>
+
+ - `/http-test/partner-api.http`
+```http
+### 파트너 등록
+POST http://localhost:8080/api/v1/partners
+Content-Type: application/json
+
+{
+  "partnerName": "테스트",
+  "businessNo": "1234123456",
+  "email": "test@test.com"
+}
+```
