@@ -492,3 +492,19 @@ useState나 useEffect가 반복 사용되는 경우 함수를 따로 정의하�
  - update시: useEffect clean up, useEffect
  - dependency array: 전달받은 값의 변화가 있는 경우에만 수행
 
+<br/>
+
+## 리액트 Eelement에 스타일 입히기
+
+```javascript
+const element = <>
+        <button className="button round" style={{ borderRadius: "50%" }}>
+            Green    
+        </button>
+        <button className="button blue curve">Blue</button>
+        <button className="button red">Red</button>
+        <button className="button gray">Gray</button>
+        <button className="button black">Black</button>
+    </>;
+```
+
